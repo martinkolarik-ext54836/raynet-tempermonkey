@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         Raynet grid reformatter (visible-grid scoped)
 // @namespace    https://tampermonkey.net/
-// @version      3.7
+// @version      3.8
 // @description  Attach toggle after every exact "Exportovať". Always rescan and apply ONLY to the currently visible grid/tab using a unique CSS scope. When enabled, clone the visible grid into a fullscreen popup and apply CSS to the clone.
 // @match        *://*.app.raynetcrm.sk/intertec*
-// @updateURL    https://raw.githubusercontent.com/martinkolarik-ext54836/raynet-tempermonkey/main/raynet-tempermonkey.user.js
-// @downloadURL  https://raw.githubusercontent.com/martinkolarik-ext54836/raynet-tempermonkey/main/raynet-tempermonkey.user.js
+// @updateURL    https://github.com/martinkolarik-ext54836/raynet-tempermonkey/raw/refs/heads/main/raynet-tempermonkey.user.js
+// @downloadURL  https://github.com/martinkolarik-ext54836/raynet-tempermonkey/raw/refs/heads/main/raynet-tempermonkey.user.js
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -230,16 +230,29 @@
     modalEl.appendChild(modalInnerEl);
     document.body.appendChild(modalEl);
 
-    // NEW: close modal when any link inside the cloned grid is clicked
+    // close modal when any link-like element is clicked inside the cloned grid
     clonedGridEl.addEventListener('click', (e) => {
-      const a = e.target.closest && e.target.closest('a');
-      if (a) {
-        ENABLED = false;
-        updateAllToggleLabels();
-        clearRules();
-        destroyModal();
+      const t = e.target;
+      if (t && (t.closest && (t.closest('a,[onclick]')))) {
+        setTimeout(() => {
+          ENABLED = false;
+          updateAllToggleLabels();
+          clearRules();
+          destroyModal();
+        }, 0);
       }
-    });
+    }, true);
+    clonedGridEl.addEventListener('auxclick', (e) => {
+      const t = e.target;
+      if (t && (t.closest && (t.closest('a,[onclick]')))) {
+        setTimeout(() => {
+          ENABLED = false;
+          updateAllToggleLabels();
+          clearRules();
+          destroyModal();
+        }, 0);
+      }
+    }, true);
 
     modalEl.addEventListener('click', (e) => {
       if (e.target === modalEl) {
