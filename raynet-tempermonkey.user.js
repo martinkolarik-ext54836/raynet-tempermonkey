@@ -4,8 +4,8 @@
 // @version      3.6a
 // @description  Attach toggle after every exact "Exportovať". Always rescan and apply ONLY to the currently visible grid/tab using a unique CSS scope. When enabled, clone the visible grid into a fullscreen popup and apply CSS to the clone.
 // @match        *://*.app.raynetcrm.sk/intertec*
-// @updateURL    https://github.com/martinkolarik-ext54836/raynet-tempermonkey/raw/refs/heads/main/raynet-tempermonkey.user.js
-// @downloadURL  https://github.com/martinkolarik-ext54836/raynet-tempermonkey/raw/refs/heads/main/raynet-tempermonkey.user.js
+// @updateURL    https://raw.githubusercontent.com/martinkolarik-ext54836/raynet-tempermonkey/main/raynet-tempermonkey.user.js
+// @downloadURL  https://raw.githubusercontent.com/martinkolarik-ext54836/raynet-tempermonkey/main/raynet-tempermonkey.user.js
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
