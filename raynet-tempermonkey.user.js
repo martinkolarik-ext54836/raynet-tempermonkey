@@ -230,6 +230,17 @@
     modalEl.appendChild(modalInnerEl);
     document.body.appendChild(modalEl);
 
+    // NEW: close modal when any link inside the cloned grid is clicked
+    clonedGridEl.addEventListener('click', (e) => {
+      const a = e.target.closest && e.target.closest('a');
+      if (a) {
+        ENABLED = false;
+        updateAllToggleLabels();
+        clearRules();
+        destroyModal();
+      }
+    });
+
     modalEl.addEventListener('click', (e) => {
       if (e.target === modalEl) {
         ENABLED = false;
