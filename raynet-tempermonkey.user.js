@@ -1,9 +1,17 @@
 // ==UserScript==
 // @name         Raynet grid reformatter (visible-grid scoped)
 // @namespace    https://tampermonkey.net/
-// @version      3.8
+// @version      3.9
 // @description  Attach toggle after every exact "Exportovať". Always rescan and apply ONLY to the currently visible grid/tab using a unique CSS scope. When enabled, clone the visible grid into a fullscreen popup and apply CSS to the clone.
-// @match        *://*.app.raynetcrm.sk/intertec*
+// @match        https://app.raynetcrm.sk/intertec*
+// @match        http://app.raynetcrm.sk/intertec*
+// @match        https://*.app.raynetcrm.sk/intertec*
+// @match        http://*.app.raynetcrm.sk/intertec*
+// @match        https://app.raynetcrm.cz/intertec*
+// @match        http://app.raynetcrm.cz/intertec*
+// @match        https://*.app.raynetcrm.cz/intertec*
+// @match        http://*.app.raynetcrm.cz/intertec*
+// @include      /^https?:\/\/([^.]+\.)?app\.raynetcrm\.(sk|cz)\/intertec.*$/i
 // @updateURL    https://github.com/martinkolarik-ext54836/raynet-tempermonkey/raw/refs/heads/main/raynet-tempermonkey.user.js
 // @downloadURL  https://github.com/martinkolarik-ext54836/raynet-tempermonkey/raw/refs/heads/main/raynet-tempermonkey.user.js
 // @run-at       document-end
