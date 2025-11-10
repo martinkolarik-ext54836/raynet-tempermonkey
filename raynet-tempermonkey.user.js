@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Raynet grid reformatter (visible-grid scoped)
 // @namespace    https://tampermonkey.net/
-// @version      3.9
+// @version      4.0
 // @description  Attach toggle after every exact "Exportovať". Always rescan and apply ONLY to the currently visible grid/tab using a unique CSS scope. When enabled, clone the visible grid into a fullscreen popup and apply CSS to the clone.
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
@@ -405,10 +405,33 @@
     return added > 0;
   }
 
+  // ---------- rename "Projekty" -> "Prístroje" ----------
+  function renameProjectsToPristroje() {
+    // Accordion items
+    Array.from(document.querySelectorAll('button.xNavigationMenuItem__ymzkf, .xNavigationMenu__topLevelItem__gU4wz'))
+      .forEach(el => {
+        const t = norm(el.textContent);
+        if (t === 'Projekty') {
+          // Preserve any child nodes, only change the title span if present
+          const titleSpan = el.querySelector('.xNavigationMenu__topLevelItemTitle__dxDkp') || el;
+          if (norm(titleSpan.textContent) !== 'Prístroje') titleSpan.textContent = 'Prístroje';
+        }
+      });
+
+    // Badges or other plain spans
+    Array.from(document.querySelectorAll('span'))
+      .forEach(el => {
+        if (norm(el.textContent) === 'Projekty') el.textContent = 'Prístroje';
+      });
+  }
+
   // ---------- observers ----------
   const domObs = new MutationObserver(() => {
     // keep buttons present in any rebuilt toolbars
     addToggleAfterAllExportButtons();
+
+    // rename menu item whenever DOM changes
+    renameProjectsToPristroje();
 
     // if enabled, re-apply only on the cloned grid in the modal
     if (ENABLED) applyRulesToVisibleGrid();
@@ -420,10 +443,10 @@
 
   // ---------- init ----------
   function init() {
-    // try immediately and on delayed loads
     let tries = 0;
     const tick = () => {
       const ok = addToggleAfterAllExportButtons();
+      renameProjectsToPristroje();
       if (ok || tries++ > 60) {
         startObservers();
         log('init complete');
