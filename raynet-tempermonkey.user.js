@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Raynet grid reformatter (visible-grid scoped)
 // @namespace    https://tampermonkey.net/
-// @version      4.1
+// @version      4.2
 // @description  Attach toggle after every exact "Exportovať". Always rescan and apply ONLY to the currently visible grid/tab using a unique CSS scope. When enabled, clone the visible grid into a fullscreen popup and apply CSS to the clone.
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
@@ -34,6 +34,11 @@
 
   const log = (...a) => console.log(TAG, ...a);
   const norm = s => (s || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const fixSelect = document.createElement('style');
+  fixSelect.textContent = `body { user-select: auto !important; }`;
+  document.head.appendChild(fixSelect);
+
 
   // ---------- util: visible detection ----------
   function isVisible(el) {
@@ -407,7 +412,7 @@
 
   // ---------- rename "Projekty" -> "Prístroje" and "Projekt" -> "Prístroj" ----------
   function renameProjectsToPristroje() {
-    // Navigation and accordion items labeled "Projekty"
+    // Navigation and accordion items
     Array.from(document.querySelectorAll('button.xNavigationMenuItem__ymzkf, .xNavigationMenu__topLevelItem__gU4wz'))
       .forEach(el => {
         const t = norm(el.textContent);
@@ -417,7 +422,7 @@
         }
       });
 
-    // Generic spans or text nodes that exactly equal "Projekty"
+    // Generic spans
     Array.from(document.querySelectorAll('span'))
       .forEach(el => {
         if (norm(el.textContent) === 'Projekty') el.textContent = 'Prístroje';
@@ -434,21 +439,25 @@
         }
       });
 
-
-      // Detail header "Projekt<span>CODE</span>" -> "Prístroj<span>CODE</span>"
-      // match hashed BEM blocks like xBusinessEntityDetailViewMainContent__codeRenderer__S83cs
-      const detailNodes = document.querySelectorAll(
-        'div[class^="xBusinessEntityDetailViewMainContent__codeRenderer__"], div[class*="__codeRenderer__"]'
-      );
-      detailNodes.forEach(el => {
-        // Prefer editing only text nodes, keep <span> with code intact
-        el.childNodes.forEach(n => {
-          if (n.nodeType === Node.TEXT_NODE && /Projekt/.test(n.textContent)) {
-            n.textContent = n.textContent.replace(/Projekt/g, 'Prístroj');
-          }
-        });
+    // Detail header "Projekt<span>CODE</span>" -> "Prístroj<span>CODE</span>" with hashed class support
+    const detailNodes = document.querySelectorAll(
+      'div[class^="xBusinessEntityDetailViewMainContent__codeRenderer__"], div[class*="__codeRenderer__"]'
+    );
+    detailNodes.forEach(el => {
+      el.childNodes.forEach(n => {
+        if (n.nodeType === Node.TEXT_NODE && /Projekt/.test(n.textContent)) {
+          n.textContent = n.textContent.replace(/Projekt/g, 'Prístroj');
+        }
       });
+    });
 
+    // Record info header
+    Array.from(document.querySelectorAll('.x-recordinfo .entity-type'))
+      .forEach(el => {
+        const txt = norm(el.textContent);
+        if (txt === 'Projekty') el.textContent = 'Prístroje';
+        if (txt === 'Projekt') el.textContent = 'Prístroj';
+      });
   }
 
   // ---------- observers ----------
@@ -456,7 +465,7 @@
     // keep buttons present in any rebuilt toolbars
     addToggleAfterAllExportButtons();
 
-    // rename menu and titles whenever DOM changes
+    // rename menu item and headers whenever DOM changes
     renameProjectsToPristroje();
 
     // if enabled, re-apply only on the cloned grid in the modal
