@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Raynet grid reformatter (visible-grid scoped)
 // @namespace    https://tampermonkey.net/
-// @version      4.4
+// @version      4.5
 // @description  Attach toggle after every exact "Exportovať". Always rescan and apply ONLY to the currently visible grid/tab using a unique CSS scope. When enabled, clone the visible grid into a fullscreen popup and apply CSS to the clone.
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
@@ -21,6 +21,11 @@
 (function () {
   'use strict';
 
+  // override Raynet "no text select"
+  const fixSelect = document.createElement('style');
+  fixSelect.textContent = `body { user-select: auto !important; }`;
+  document.head.appendChild(fixSelect);
+
   const TAG = '[TM GridFix v3.5]';
   let ENABLED = false;
   let scopeCounter = 0;                // for unique scope classes
@@ -34,11 +39,6 @@
 
   const log = (...a) => console.log(TAG, ...a);
   const norm = s => (s || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
-
-  const fixSelect = document.createElement('style');
-  fixSelect.textContent = `body { user-select: auto !important; }`;
-  document.head.appendChild(fixSelect);
-
 
   // ---------- util: visible detection ----------
   function isVisible(el) {
@@ -412,49 +412,34 @@
 
   // ---------- rename "Projekty" -> "Prístroje" and "Projekt" -> "Prístroj" ----------
   function renameProjectsToPristroje() {
-    // Navigation and accordion items labeled "Projekty" (hash-proof)
+    // Navigation and accordion items (class suffix varies daily)
     Array.from(document.querySelectorAll(
-      'div.-businessGroup button,' +
-      'button[class^="xNavigationMenuItem__"], button[class*=" xNavigationMenuItem__"],' +
-      'button[class^="xNavigationMenu__topLevelItem__"], button[class*=" xNavigationMenu__topLevelItem__"]'
+      'button[class^="xNavigationMenuItem__"], button[class*=" xNavigationMenuItem__"], ' +
+      '[class^="xNavigationMenu__topLevelItem__"], [class*=" xNavigationMenu__topLevelItem__"]'
     )).forEach(el => {
-      if (norm(el.textContent) === 'Projekty') {
-        const t = el.querySelector('[class^="xNavigationMenu__topLevelItemTitle__"], [class*=" xNavigationMenu__topLevelItemTitle__"]');
-        if (t) t.textContent = 'Prístroje';
-        else {
-          el.childNodes.forEach(n => {
-            if (n.nodeType === Node.TEXT_NODE && n.textContent.trim() === 'Projekty') n.textContent = 'Prístroje';
-          });
-        }
+      const t = norm(el.textContent);
+      if (t === 'Projekty') {
+        const titleSpan = el.querySelector('[class^="xNavigationMenu__topLevelItemTitle__"], [class*=" xNavigationMenu__topLevelItemTitle__"]') || el;
+        if (norm(titleSpan.textContent) !== 'Prístroje') titleSpan.textContent = 'Prístroje';
       }
     });
 
-
-    const t = el.querySelector('[class^="xNavigationMenu__topLevelItemTitle__"], [class*=" xNavigationMenu__topLevelItemTitle__"]');
-    if (t) t.textContent = 'Prístroje';
-    else {
-      el.childNodes.forEach(n => {
-        if (n.nodeType === Node.TEXT_NODE && n.textContent.trim() === 'Projekty') n.textContent = 'Prístroje';
-      });
-    }
-    // Generic spans
-    Array.from(document.querySelectorAll('span'))
-      .forEach(el => {
-        if (norm(el.textContent) === 'Projekty') el.textContent = 'Prístroje';
-      });
+    // Generic spans or text nodes that exactly equal "Projekty"
+    Array.from(document.querySelectorAll('span')).forEach(el => {
+      if (norm(el.textContent) === 'Projekty') el.textContent = 'Prístroje';
+    });
 
     // List view title divs
-    Array.from(document.querySelectorAll('div.xListViewTitle'))
-      .forEach(el => {
-        const txt = norm(el.textContent);
-        const tit = el.getAttribute('title');
-        if (txt === 'Projekty' || tit === 'Projekty') {
-          el.textContent = 'Prístroje';
-          if (tit !== null) el.setAttribute('title', 'Prístroje');
-        }
-      });
+    Array.from(document.querySelectorAll('div.xListViewTitle')).forEach(el => {
+      const txt = norm(el.textContent);
+      const tit = el.getAttribute('title');
+      if (txt === 'Projekty' || tit === 'Projekty') {
+        el.textContent = 'Prístroje';
+        if (tit !== null) el.setAttribute('title', 'Prístroje');
+      }
+    });
 
-    // Detail header "Projekt<span>CODE</span>" -> "Prístroj<span>CODE</span>" with hashed class support
+    // Detail header "Projekt<span>CODE</span>" -> "Prístroj<span>CODE</span>" (hashed class suffix changes)
     const detailNodes = document.querySelectorAll(
       'div[class^="xBusinessEntityDetailViewMainContent__codeRenderer__"], div[class*="__codeRenderer__"]'
     );
@@ -466,13 +451,12 @@
       });
     });
 
-    // Record info header
-    Array.from(document.querySelectorAll('.x-recordinfo .entity-type'))
-      .forEach(el => {
-        const txt = norm(el.textContent);
-        if (txt === 'Projekty') el.textContent = 'Prístroje';
-        if (txt === 'Projekt') el.textContent = 'Prístroj';
-      });
+    // Record info header: <div class="x-recordinfo"><div><div class="entity-type">Projekty</div></div></div>
+    Array.from(document.querySelectorAll('.x-recordinfo .entity-type')).forEach(el => {
+      const txt = norm(el.textContent);
+      if (txt === 'Projekty') el.textContent = 'Prístroje';
+      if (txt === 'Projekt') el.textContent = 'Prístroj';
+    });
   }
 
   // ---------- observers ----------
@@ -480,7 +464,7 @@
     // keep buttons present in any rebuilt toolbars
     addToggleAfterAllExportButtons();
 
-    // rename menu item and headers whenever DOM changes
+    // rename menu and titles whenever DOM changes
     renameProjectsToPristroje();
 
     // if enabled, re-apply only on the cloned grid in the modal
