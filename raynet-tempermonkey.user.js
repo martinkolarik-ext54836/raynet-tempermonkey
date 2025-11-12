@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Raynet grid reformatter (visible-grid scoped)
 // @namespace    https://tampermonkey.net/
-// @version      4.3
+// @version      4.4
 // @description  Attach toggle after every exact "Exportovať". Always rescan and apply ONLY to the currently visible grid/tab using a unique CSS scope. When enabled, clone the visible grid into a fullscreen popup and apply CSS to the clone.
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
@@ -412,16 +412,31 @@
 
   // ---------- rename "Projekty" -> "Prístroje" and "Projekt" -> "Prístroj" ----------
   function renameProjectsToPristroje() {
-    // Navigation and accordion items
-    Array.from(document.querySelectorAll('button.xNavigationMenuItem__ymzkf, .xNavigationMenu__topLevelItem__gU4wz'))
-      .forEach(el => {
-        const t = norm(el.textContent);
-        if (t === 'Projekty') {
-          const titleSpan = el.querySelector('.xNavigationMenu__topLevelItemTitle__dxDkp') || el;
-          if (norm(titleSpan.textContent) !== 'Prístroje') titleSpan.textContent = 'Prístroje';
+    // Navigation and accordion items labeled "Projekty" (hash-proof)
+    Array.from(document.querySelectorAll(
+      'div.-businessGroup button,' +
+      'button[class^="xNavigationMenuItem__"], button[class*=" xNavigationMenuItem__"],' +
+      'button[class^="xNavigationMenu__topLevelItem__"], button[class*=" xNavigationMenu__topLevelItem__"]'
+    )).forEach(el => {
+      if (norm(el.textContent) === 'Projekty') {
+        const t = el.querySelector('[class^="xNavigationMenu__topLevelItemTitle__"], [class*=" xNavigationMenu__topLevelItemTitle__"]');
+        if (t) t.textContent = 'Prístroje';
+        else {
+          el.childNodes.forEach(n => {
+            if (n.nodeType === Node.TEXT_NODE && n.textContent.trim() === 'Projekty') n.textContent = 'Prístroje';
+          });
         }
-      });
+      }
+    });
 
+
+    const t = el.querySelector('[class^="xNavigationMenu__topLevelItemTitle__"], [class*=" xNavigationMenu__topLevelItemTitle__"]');
+    if (t) t.textContent = 'Prístroje';
+    else {
+      el.childNodes.forEach(n => {
+        if (n.nodeType === Node.TEXT_NODE && n.textContent.trim() === 'Projekty') n.textContent = 'Prístroje';
+      });
+    }
     // Generic spans
     Array.from(document.querySelectorAll('span'))
       .forEach(el => {
