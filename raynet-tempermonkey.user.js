@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Raynet tweaks (select + rename + wide detail)
 // @namespace    https://tampermonkey.net/
-// @version      5.0
+// @version      5.1
 // @description  Allow text selection, rename Projekty->Prístroje, hide the detail-view side panel and stretch the main column (and the tables inside it) to full width.
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
@@ -93,6 +93,17 @@
     // Leaf spans that are exactly "Projekty".
     // childElementCount check keeps us from blowing away a wrapper's children.
     document.querySelectorAll('span').forEach(el => {
+      if (el.childElementCount === 0 && norm(el.textContent) === 'Projekty') {
+        el.textContent = 'Prístroje';
+      }
+    });
+
+    // "Naviazané záznamy" sublist title - a div, so the span pass above
+    // misses it. childElementCount === 0 targets the inner text node holder
+    // and leaves the wrapper that contains the dropdown chevron alone.
+    document.querySelectorAll(
+      '[class*="xLinkedRecordsSublistSelect__value__"], [class*="xDetailListView__title__"]'
+    ).forEach(el => {
       if (el.childElementCount === 0 && norm(el.textContent) === 'Projekty') {
         el.textContent = 'Prístroje';
       }
