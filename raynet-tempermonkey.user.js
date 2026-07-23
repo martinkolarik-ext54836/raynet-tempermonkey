@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Raynet tweaks (select + rename + wide detail)
 // @namespace    https://tampermonkey.net/
-// @version      5.4
-// @description  Allow text selection, rename Projekty->Prístroje, on the client/contact detail hide the side panel and stretch the main column to full width, and auto-reload after the custom generate-offer-PDF API call succeeds (with a toast fallback).
+// @version      5.5
+// @description  Allow text selection, rename Projekty->Prístroje, on the client/contact detail hide the side panel and stretch the main column to full width, and after the custom generate-offer-PDF call succeeds refresh the record in place via "Aktualizovať záznam" (no page reload, keeps tabs).
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
 // @match        https://*.app.raynetcrm.sk/intertec*
@@ -170,22 +170,73 @@
   // (which Raynet reads to show a toast). The detail view does not re-fetch,
   // so the new attachment only appears after a manual "Aktualizovať záznam".
   //
-  // Two triggers, sharing a single one-shot guard so at most one reload
-  // happens per generation:
+  // Two triggers, collapsed into one refresh per generation:
   //   a) primary - intercept the AJAX call to the generate-offer API and
-  //      reload on HTTP success. Because Raynet reads the response body, the
+  //      refresh on HTTP success. Because Raynet reads the response body, the
   //      endpoint is CORS-readable, so the real status is visible.
   //   b) fallback - watch Raynet's Radix toast area for the success message,
   //      in case the request ever goes out through a path we don't wrap.
-  const OFFER_API_RE   = /\/\/api\.intertec\.sk\/generate-offer\//i;
-  const REFRESH_ON_TOAST = /Ponuka vygenerovan/i; // stem: matches -á/-ý/-é, "... do PDF"
-  const REFRESH_DELAY_MS = 600; // let the server-side attach settle
-  let refreshArmed = true;      // one-shot; a reload resets it anyway
+  //
+  // The refresh is NOT a page reload - that would drop all open Raynet tabs.
+  // Instead we invoke Raynet's own "Aktualizovať záznam" menu action, which
+  // re-fetches the record in place (POST /special/{Entity}/detail/{id} + the
+  // related wall/history/activity calls) and re-renders just this tab.
+  const OFFER_API_RE     = /\/\/api\.intertec\.sk\/generate-offer\//i;
+  const REFRESH_ON_TOAST = /Ponuka vygenerovan/i;   // stem: matches -á/-ý/-é, "... do PDF"
+  const REFRESH_MENU_ITEM = 'Aktualizovať záznam';  // exact record-refresh menu label
+  const REFRESH_DELAY_MS = 600;                     // let the server-side attach settle
+  const REARM_MS         = 3000;                    // ignore duplicate triggers this long
+  let refreshPending = false;
 
+  // Collapse the near-simultaneous network + toast triggers into a single
+  // refresh, then re-arm (there is no reload to reset state) so a later
+  // generation in the same session refreshes again.
   function triggerRefresh() {
-    if (!refreshArmed) return;
-    refreshArmed = false;
-    setTimeout(() => location.reload(), REFRESH_DELAY_MS);
+    if (refreshPending) return;
+    refreshPending = true;
+    setTimeout(() => {
+      refreshRecord();
+      setTimeout(() => { refreshPending = false; }, REARM_MS);
+    }, REFRESH_DELAY_MS);
+  }
+
+  // Invoke "Aktualizovať záznam" via Raynet's own header "..." menu.
+  // Anchored on the generate(*)/add(+) button so we find the record-level
+  // more-menu in that same action group - never the products toolbar's or a
+  // tab bar's "...", and never the -orange/-primary buttons themselves (which
+  // would re-run the generate/add action). Radix mounts the menu content
+  // async, so we poll for the item; selection is a plain click. On failure we
+  // do nothing - deliberately no page-reload fallback.
+  function refreshRecord() {
+    const anchor = document.querySelector('button.-orange[aria-haspopup="menu"]')
+                || document.querySelector('button.-primary[aria-haspopup="menu"]');
+    if (!anchor) return;
+
+    let more = null;
+    for (let node = anchor.parentElement, i = 0; node && i < 8; node = node.parentElement, i++) {
+      more = node.querySelector('button.-lightGrey[aria-haspopup="menu"]');
+      if (more) break;
+    }
+    if (!more) return;
+
+    if (more.getAttribute('data-state') !== 'open') {
+      // Radix trigger opens on a primary pointerdown/up (a full click toggles
+      // it straight back closed, so do NOT dispatch click here).
+      more.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, pointerType: 'mouse', isPrimary: true }));
+      more.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, cancelable: true, button: 0, pointerType: 'mouse', isPrimary: true }));
+    }
+
+    let tries = 0;
+    const iv = setInterval(() => {
+      const item = [...document.querySelectorAll('[role="menuitem"]')]
+        .find(e => norm(e.textContent) === REFRESH_MENU_ITEM && e.getBoundingClientRect().width > 0);
+      if (item) {
+        clearInterval(iv);
+        item.click(); // Radix selects on click -> app re-fetches this record
+      } else if (++tries > 20) {
+        clearInterval(iv); // menu never mounted; give up quietly
+      }
+    }, 100);
   }
 
   // (a) wrap fetch + XMLHttpRequest. Installed synchronously (not in init)
@@ -232,12 +283,11 @@
     vp.__tmToastWatched = true;
 
     new MutationObserver(muts => {
-      if (!refreshArmed) return;
       for (const m of muts) {
         for (const n of m.addedNodes) {
           if (n.nodeType !== 1) continue;
           if (REFRESH_ON_TOAST.test(norm(n.textContent))) {
-            triggerRefresh();
+            triggerRefresh(); // guarded internally against duplicate triggers
             return;
           }
         }
