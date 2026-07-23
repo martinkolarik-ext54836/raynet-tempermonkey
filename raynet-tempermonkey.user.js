@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Raynet tweaks (select + rename + wide detail)
 // @namespace    https://tampermonkey.net/
-// @version      5.2
-// @description  Allow text selection, rename Projekty->Prístroje, and on the client/contact detail only: hide the side panel and stretch the main column (and the tables inside it) to full width.
+// @version      5.3
+// @description  Allow text selection, rename Projekty->Prístroje, on the client/contact detail hide the side panel and stretch the main column to full width, and auto-reload after the custom "generate offer PDF" success toast.
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
 // @match        https://*.app.raynetcrm.sk/intertec*
@@ -162,9 +162,47 @@
     if (document.body) observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  // ------------------------------------------------------------------
+  // 3. Auto-refresh after the custom "generate offer PDF" action.
+  // ------------------------------------------------------------------
+  // The custom offer action calls an external API that builds the PDF and
+  // attaches it to the offer server-side, then shows a success toast. The
+  // detail view does not re-fetch, so the new attachment only appears after
+  // a manual "Aktualizovať záznam". Watch Raynet's toast area (a Radix
+  // <ol class="xToastViewport">) for that success message and reload once.
+  //
+  // Matches the message stem so any ending (vygenerovaná/-ý/-é) or suffix
+  // ("... do PDF") still triggers, while unrelated offer toasts such as
+  // "Ponuka odoslaná e-mailom" do not.
+  const REFRESH_ON_TOAST = /Ponuka vygenerovan/i;
+  const REFRESH_DELAY_MS = 600; // let the server-side attach settle
+  let refreshArmed = true;      // one-shot; a reload resets it anyway
+
+  function watchToasts() {
+    const vp = document.querySelector('.xToastViewport');
+    if (!vp) { setTimeout(watchToasts, 1000); return; } // app shell not up yet
+    if (vp.__tmToastWatched) return;
+    vp.__tmToastWatched = true;
+
+    new MutationObserver(muts => {
+      if (!refreshArmed) return;
+      for (const m of muts) {
+        for (const n of m.addedNodes) {
+          if (n.nodeType !== 1) continue;
+          if (REFRESH_ON_TOAST.test(norm(n.textContent))) {
+            refreshArmed = false;
+            setTimeout(() => location.reload(), REFRESH_DELAY_MS);
+            return;
+          }
+        }
+      }
+    }).observe(vp, { childList: true, subtree: true });
+  }
+
   function init() {
     renameProjectsToPristroje();
     start();
+    watchToasts();
   }
 
   if (document.readyState === 'loading') {
