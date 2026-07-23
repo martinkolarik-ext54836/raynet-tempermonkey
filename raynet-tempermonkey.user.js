@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Raynet tweaks (select + rename + wide detail)
 // @namespace    https://tampermonkey.net/
-// @version      5.3
-// @description  Allow text selection, rename Projekty->Prístroje, on the client/contact detail hide the side panel and stretch the main column to full width, and auto-reload after the custom "generate offer PDF" success toast.
+// @version      5.4
+// @description  Allow text selection, rename Projekty->Prístroje, on the client/contact detail hide the side panel and stretch the main column to full width, and auto-reload after the custom generate-offer-PDF API call succeeds (with a toast fallback).
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
 // @match        https://*.app.raynetcrm.sk/intertec*
@@ -166,18 +166,65 @@
   // 3. Auto-refresh after the custom "generate offer PDF" action.
   // ------------------------------------------------------------------
   // The custom offer action calls an external API that builds the PDF and
-  // attaches it to the offer server-side, then shows a success toast. The
-  // detail view does not re-fetch, so the new attachment only appears after
-  // a manual "Aktualizovať záznam". Watch Raynet's toast area (a Radix
-  // <ol class="xToastViewport">) for that success message and reload once.
+  // attaches it to the offer server-side, then returns a success payload
+  // (which Raynet reads to show a toast). The detail view does not re-fetch,
+  // so the new attachment only appears after a manual "Aktualizovať záznam".
   //
-  // Matches the message stem so any ending (vygenerovaná/-ý/-é) or suffix
-  // ("... do PDF") still triggers, while unrelated offer toasts such as
-  // "Ponuka odoslaná e-mailom" do not.
-  const REFRESH_ON_TOAST = /Ponuka vygenerovan/i;
+  // Two triggers, sharing a single one-shot guard so at most one reload
+  // happens per generation:
+  //   a) primary - intercept the AJAX call to the generate-offer API and
+  //      reload on HTTP success. Because Raynet reads the response body, the
+  //      endpoint is CORS-readable, so the real status is visible.
+  //   b) fallback - watch Raynet's Radix toast area for the success message,
+  //      in case the request ever goes out through a path we don't wrap.
+  const OFFER_API_RE   = /\/\/api\.intertec\.sk\/generate-offer\//i;
+  const REFRESH_ON_TOAST = /Ponuka vygenerovan/i; // stem: matches -á/-ý/-é, "... do PDF"
   const REFRESH_DELAY_MS = 600; // let the server-side attach settle
   let refreshArmed = true;      // one-shot; a reload resets it anyway
 
+  function triggerRefresh() {
+    if (!refreshArmed) return;
+    refreshArmed = false;
+    setTimeout(() => location.reload(), REFRESH_DELAY_MS);
+  }
+
+  // (a) wrap fetch + XMLHttpRequest. Installed synchronously (not in init)
+  //     so no call is missed; the generate action only fires on user click,
+  //     well after this runs.
+  function hookNetwork() {
+    const urlOf = x => (typeof x === 'string' ? x : (x && x.url) || String(x || ''));
+
+    const _fetch = window.fetch;
+    if (typeof _fetch === 'function') {
+      window.fetch = function (input, init) {
+        const p = _fetch.apply(this, arguments);
+        if (OFFER_API_RE.test(urlOf(input))) {
+          p.then(res => { if (res && res.ok) triggerRefresh(); }).catch(() => {});
+        }
+        return p;
+      };
+    }
+
+    const XHR = window.XMLHttpRequest;
+    if (XHR && XHR.prototype) {
+      const _open = XHR.prototype.open;
+      const _send = XHR.prototype.send;
+      XHR.prototype.open = function (method, url) {
+        this.__tmOfferApi = OFFER_API_RE.test(url || '');
+        return _open.apply(this, arguments);
+      };
+      XHR.prototype.send = function () {
+        if (this.__tmOfferApi) {
+          this.addEventListener('load', () => {
+            if (this.status >= 200 && this.status < 300) triggerRefresh();
+          });
+        }
+        return _send.apply(this, arguments);
+      };
+    }
+  }
+
+  // (b) toast fallback
   function watchToasts() {
     const vp = document.querySelector('.xToastViewport');
     if (!vp) { setTimeout(watchToasts, 1000); return; } // app shell not up yet
@@ -190,14 +237,15 @@
         for (const n of m.addedNodes) {
           if (n.nodeType !== 1) continue;
           if (REFRESH_ON_TOAST.test(norm(n.textContent))) {
-            refreshArmed = false;
-            setTimeout(() => location.reload(), REFRESH_DELAY_MS);
+            triggerRefresh();
             return;
           }
         }
       }
     }).observe(vp, { childList: true, subtree: true });
   }
+
+  hookNetwork();
 
   function init() {
     renameProjectsToPristroje();
