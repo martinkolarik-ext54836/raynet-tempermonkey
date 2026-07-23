@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Raynet tweaks (select + rename + wide detail)
 // @namespace    https://tampermonkey.net/
-// @version      5.1
-// @description  Allow text selection, rename Projekty->Prístroje, hide the detail-view side panel and stretch the main column (and the tables inside it) to full width.
+// @version      5.2
+// @description  Allow text selection, rename Projekty->Prístroje, and on the client/contact detail only: hide the side panel and stretch the main column (and the tables inside it) to full width.
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
 // @match        https://*.app.raynetcrm.sk/intertec*
@@ -31,28 +31,37 @@
   // ------------------------------------------------------------------
   // Hashed class suffixes (__lbiIv, __EMoGj, ...) change between Raynet
   // builds, so anything hashed is matched with [class*="prefix__"].
+  //
+  // Everything except text-select is scoped to `.xDetailViewLayout.-contact`,
+  // the client/contact detail layout (Company + Person). Other detail layouts
+  // must NOT be touched:
+  //   -business             (deal)  has no widget column
+  //   -content-mid-reversed (task)  puts the -widget column on the LEFT and
+  //                                 keeps "Mám hotovo" in -content; an unscoped
+  //                                 `-widget { display:none }` there hid the
+  //                                 left column and the content grid-column
+  //                                 override overlapped the -side panel.
+  const SCOPE = '.xDetailViewLayout.-contact';
   const CSS = `
-    /* --- override Raynet "no text select" --- */
+    /* --- override Raynet "no text select" (global, harmless everywhere) --- */
     body { user-select: auto !important; }
 
     /* --- hide the right-hand widget column + the tab that pops it back out --- */
-    .xDetailViewLayoutColumn.-widget,
-    .xInfoPanelFabWithSidePanel { display: none !important; }
+    ${SCOPE} .xDetailViewLayoutColumn.-widget,
+    ${SCOPE} .xInfoPanelFabWithSidePanel { display: none !important; }
 
     /* --- lift the fixed max-widths so the view uses the whole window --- */
-    .xDetailViewLayout,
-    [class*="xDetailListViewLayout__"] { max-width: none !important; }
+    ${SCOPE},
+    ${SCOPE} [class*="xDetailListViewLayout__"] { max-width: none !important; }
 
     /* --- let the main column swallow the freed grid tracks.
            Scoped with :has() so it only touches layouts that actually have a
-           widget column: the deal (-business) layout has a different column
-           set (-full/-side/-content) and gets mangled by a blanket
-           grid-template-columns override. --- */
-    .xDetailViewLayout__inner:has(> .xDetailViewLayoutColumn.-widget)
+           widget column. --- */
+    ${SCOPE} .xDetailViewLayout__inner:has(> .xDetailViewLayoutColumn.-widget)
       > .xDetailViewLayoutColumn.-content {
       grid-column: ${HIDE_LEFT_COLUMN ? '1' : '2'} / -1 !important;
     }
-    ${HIDE_LEFT_COLUMN ? '.xDetailViewLayoutColumn.-side { display: none !important; }' : ''}
+    ${HIDE_LEFT_COLUMN ? `${SCOPE} .xDetailViewLayoutColumn.-side { display: none !important; }` : ''}
 
     /* --- stretch the tables *inside* the panels.
            Raynet gives each column a fixed inline px width and never
@@ -61,14 +70,14 @@
            that also carries an inline px width - widen that first, then let
            the flex cells grow into it. Header and body must both be widened
            or they visibly desync. --- */
-    [class*="xDetailViewVirtualScrollerTableWrapper__"] > div,
-    [class*="xDetailViewTableHeader__container__"],
-    [class*="xDetailViewTableRow__wrapper__"],
-    [class*="xDetailViewTableBody__row__"] {
+    ${SCOPE} [class*="xDetailViewVirtualScrollerTableWrapper__"] > div,
+    ${SCOPE} [class*="xDetailViewTableHeader__container__"],
+    ${SCOPE} [class*="xDetailViewTableRow__wrapper__"],
+    ${SCOPE} [class*="xDetailViewTableBody__row__"] {
       width: 100% !important;
     }
-    [class*="xTableHeader__cell"],
-    [class*="xDetailViewTableBody__cell__"] {
+    ${SCOPE} [class*="xTableHeader__cell"],
+    ${SCOPE} [class*="xDetailViewTableBody__cell__"] {
       flex-grow: 1 !important;
     }
   `;
