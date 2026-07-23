@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Raynet tweaks (select + rename + wide detail)
 // @namespace    https://tampermonkey.net/
-// @version      5.5
+// @version      5.6
 // @description  Allow text selection, rename Projekty->Prístroje, on the client/contact detail hide the side panel and stretch the main column to full width, and after the custom generate-offer-PDF call succeeds refresh the record in place via "Aktualizovať záznam" (no page reload, keeps tabs).
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
@@ -200,6 +200,27 @@
     }, REFRESH_DELAY_MS);
   }
 
+  // The active Raynet tab's scroll container. There is one scroll wrapper per
+  // open tab, so a plain querySelector may hit a hidden tab's wrapper - scope
+  // to the active tab body.
+  const activeScroller = () =>
+    document.querySelector('.xMainTabs__bodyContent.-active .xMainTabContent__scrollWrapper');
+
+  // Raynet's own "Aktualizovať záznam" resets the record's scroll to the top
+  // (it does this on a manual click too). Pin the scroll back to where it was
+  // for a short window after we trigger the refresh, so the re-render's reset
+  // is corrected within one frame and the jump is not visible.
+  const PIN_SCROLL_MS = 1500;
+  function keepScroll(savedTop) {
+    if (!savedTop) return; // already at top, nothing to preserve
+    const started = Date.now();
+    const iv = setInterval(() => {
+      const sc = activeScroller();
+      if (sc && sc.scrollTop !== savedTop) sc.scrollTop = savedTop;
+      if (Date.now() - started > PIN_SCROLL_MS) clearInterval(iv);
+    }, 50);
+  }
+
   // Invoke "Aktualizovať záznam" via Raynet's own header "..." menu.
   // Anchored on the generate(*)/add(+) button so we find the record-level
   // more-menu in that same action group - never the products toolbar's or a
@@ -219,6 +240,9 @@
     }
     if (!more) return;
 
+    const sc = activeScroller();
+    const savedTop = sc ? sc.scrollTop : 0; // capture before the refresh resets it
+
     if (more.getAttribute('data-state') !== 'open') {
       // Radix trigger opens on a primary pointerdown/up (a full click toggles
       // it straight back closed, so do NOT dispatch click here).
@@ -232,7 +256,8 @@
         .find(e => norm(e.textContent) === REFRESH_MENU_ITEM && e.getBoundingClientRect().width > 0);
       if (item) {
         clearInterval(iv);
-        item.click(); // Radix selects on click -> app re-fetches this record
+        item.click();       // Radix selects on click -> app re-fetches this record
+        keepScroll(savedTop); // ...which scrolls to top; hold the old position
       } else if (++tries > 20) {
         clearInterval(iv); // menu never mounted; give up quietly
       }
