@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Raynet tweaks (select + rename + wide detail)
 // @namespace    https://tampermonkey.net/
-// @version      5.6
+// @version      5.7
 // @description  Allow text selection, rename Projekty->Prístroje, on the client/contact detail hide the side panel and stretch the main column to full width, and after the custom generate-offer-PDF call succeeds refresh the record in place via "Aktualizovať záznam" (no page reload, keeps tabs).
 // @match        https://app.raynetcrm.sk/intertec*
 // @match        http://app.raynetcrm.sk/intertec*
@@ -65,16 +65,26 @@
 
     /* --- stretch the tables *inside* the panels.
            Raynet gives each column a fixed inline px width and never
-           redistributes the slack, so the table sits left-aligned with dead
-           space on the right. The rows live in a virtual-scroller sizer div
-           that also carries an inline px width - widen that first, then let
-           the flex cells grow into it. Header and body must both be widened
-           or they visibly desync. --- */
+           redistributes the slack, so a narrow table (e.g. Kontaktné osoby)
+           sits left-aligned with dead space on the right. The rows live in a
+           virtual-scroller sizer div that also carries an inline px width;
+           widen that, then let the flex cells grow into it.
+
+           Use MIN-width, not plain width. A wide sublist (e.g. E-maily /
+           Aktivity, ~14 columns) has a natural width GREATER than the column
+           and is meant to scroll horizontally. Plain width:100% forced it
+           *narrower* than natural, squashing every column - and because the
+           header cells are uniform while the body rows carry an extra
+           unclassed spacer cell, the flex redistribution then desynced header
+           vs body. min-width:100% only ever grows a table up to fill the
+           column; tables already wider than that keep their natural width and
+           scroll, exactly like Raynet's default (just with more visible width
+           from the freed widget column). --- */
     ${SCOPE} [class*="xDetailViewVirtualScrollerTableWrapper__"] > div,
     ${SCOPE} [class*="xDetailViewTableHeader__container__"],
     ${SCOPE} [class*="xDetailViewTableRow__wrapper__"],
     ${SCOPE} [class*="xDetailViewTableBody__row__"] {
-      width: 100% !important;
+      min-width: 100% !important;
     }
     ${SCOPE} [class*="xTableHeader__cell"],
     ${SCOPE} [class*="xDetailViewTableBody__cell__"] {
