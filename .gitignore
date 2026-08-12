@@ -1,0 +1,5 @@
+# Local AI workflow artifacts (not deliverables)
+.ai/specs/
+.ai/plans/
+.ai/reviews/
+.ai/state/
